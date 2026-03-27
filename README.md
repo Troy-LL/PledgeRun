@@ -156,9 +156,9 @@ Simulate without submitting: add **`--send no`** to `stellar contract invoke` (r
 
 ```
 ├── contract/          Soroban contract (Rust)
-├── web/               React + Vite + Tailwind + shadcn/ui (main UI)
-├── frontend/          legacy single-file HTML (`legacy-index.html`)
-└── PROJECT_BRIEF.md
+├── web/               React + Vite + Tailwind + shadcn/ui
+├── PROJECT_BRIEF.md
+└── LICENSE
 ```
 
 ### Web UI (optional)

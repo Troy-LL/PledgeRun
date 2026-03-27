@@ -1,28 +1,44 @@
 #![no_std]
+
+//! PledgeRun — Soroban escrow for crowdfunding campaigns (MVP).
+//!
+//! **MVP flow:** `init` (creator opens campaign) → `pledge` (backers commit amounts on-chain) →
+//! after the deadline, either `release` (goal met) or `refund` (goal not met). Read-only
+//! `get_campaign` / `get_pledge` support the UI.
+
 use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short,
     Address, Env, Map, Symbol,
 };
 
 // ---------------------------------------------------------------------------
-// Storage keys
+// Storage keys — instance storage (single campaign per contract deployment)
 // ---------------------------------------------------------------------------
+
+/// Key for the [`Campaign`] struct (one record per deployed contract in MVP).
 const CAMPAIGN: Symbol = symbol_short!("CAMPAIGN");
+
+/// Key for the map of backer [`Address`] → pledged amount (stroops).
 const PLEDGES: Symbol = symbol_short!("PLEDGES");
 
 // ---------------------------------------------------------------------------
 // Data types
 // ---------------------------------------------------------------------------
 
-/// The campaign record stored on-chain.
+/// On-chain campaign record: goal, deadline, running total, lifecycle flag.
 #[contracttype]
 #[derive(Clone)]
 pub struct Campaign {
-    pub creator: Address, // who created the campaign
-    pub goal: i128,       // target amount in stroops (1 XLM = 10_000_000 stroops)
-    pub deadline: u64,   // Unix timestamp after which no new pledges are accepted
-    pub total: i128,      // running total of pledges received
-    pub finalized: bool,  // true once funds have been released or refunds issued
+    /// Account that created the campaign; must authorize `init`.
+    pub creator: Address,
+    /// Funding target in stroops (1 XLM = 10_000_000 stroops).
+    pub goal: i128,
+    /// Unix time (seconds); pledges allowed only while `ledger.timestamp <= deadline`.
+    pub deadline: u64,
+    /// Sum of all pledge amounts (stroops).
+    pub total: i128,
+    /// Set true after a successful `release` or `refund`.
+    pub finalized: bool,
 }
 
 // ---------------------------------------------------------------------------
@@ -34,18 +50,17 @@ pub struct PledgeRun;
 
 #[contractimpl]
 impl PledgeRun {
-    /// Initialize a new campaign.
-    /// Must be called once before any pledging can happen.
+    /// **MVP: initialize campaign** — one-time setup so backers can `pledge`.
+    ///
+    /// The creator proves control by signing (`require_auth`). Stores goal and deadline,
+    /// initializes an empty pledge map. Panics if the campaign already exists (duplicate `init`).
     pub fn init(env: Env, creator: Address, goal: i128, deadline: u64) {
-        // Require the creator to sign this transaction.
         creator.require_auth();
 
-        // Prevent re-initialization.
         if env.storage().instance().has(&CAMPAIGN) {
             panic!("campaign already exists");
         }
 
-        // Validate inputs.
         assert!(goal > 0, "goal must be positive");
         assert!(deadline > env.ledger().timestamp(), "deadline must be in the future");
 
@@ -59,14 +74,14 @@ impl PledgeRun {
 
         env.storage().instance().set(&CAMPAIGN, &campaign);
 
-        // Initialize an empty pledges map: Address -> amount pledged.
         let pledges: Map<Address, i128> = Map::new(&env);
         env.storage().instance().set(&PLEDGES, &pledges);
     }
 
-    /// Record a pledge from a backer.
-    /// In a real deployment the XLM transfer would be handled via a token contract;
-    /// here we track pledge amounts on-chain so refunds / release logic is deterministic.
+    /// **MVP: record a pledge** — backer commits an amount toward the goal before the deadline.
+    ///
+    /// The backer must sign. Increments per-address totals and campaign `total`. Token transfer
+    /// is out of scope for MVP; amounts are tracked for deterministic release/refund logic later.
     pub fn pledge(env: Env, backer: Address, amount: i128) {
         backer.require_auth();
 
@@ -80,7 +95,6 @@ impl PledgeRun {
             "campaign deadline has passed"
         );
 
-        // Update the backer's total pledge (they may pledge multiple times).
         let mut pledges: Map<Address, i128> = env.storage().instance().get(&PLEDGES).unwrap();
         let existing = pledges.get(backer.clone()).unwrap_or(0);
         pledges.set(backer, existing + amount);
@@ -90,8 +104,9 @@ impl PledgeRun {
         env.storage().instance().set(&CAMPAIGN, &campaign);
     }
 
-    /// Release funds to the creator if the goal has been met.
-    /// Anyone can call this after the deadline; the contract verifies conditions.
+    /// **MVP: finalize success** — after the deadline, if `total >= goal`, mark campaign finalized.
+    ///
+    /// Callable after the deadline; contract checks goal reached. Returns total released (stroops).
     pub fn release(env: Env) -> i128 {
         let mut campaign: Campaign = env.storage().instance().get(&CAMPAIGN).unwrap();
 
@@ -105,12 +120,12 @@ impl PledgeRun {
         campaign.finalized = true;
         env.storage().instance().set(&CAMPAIGN, &campaign);
 
-        // Return the total so the caller can confirm the released amount.
         campaign.total
     }
 
-    /// Refund all backers if the deadline passed without reaching the goal.
-    /// Returns the number of backers refunded.
+    /// **MVP: finalize failure** — after the deadline, if `total < goal`, mark finalized for refund semantics.
+    ///
+    /// Returns backer count from storage (MVP bookkeeping; actual token payouts are a follow-on).
     pub fn refund(env: Env) -> u32 {
         let mut campaign: Campaign = env.storage().instance().get(&CAMPAIGN).unwrap();
 
@@ -128,12 +143,12 @@ impl PledgeRun {
         pledges.len()
     }
 
-    /// Read the current campaign state (for the frontend).
+    /// Read campaign state (RPC / UI).
     pub fn get_campaign(env: Env) -> Campaign {
         env.storage().instance().get(&CAMPAIGN).unwrap()
     }
 
-    /// Read how much a specific backer has pledged.
+    /// Read one backer’s cumulative pledge (stroops).
     pub fn get_pledge(env: Env, backer: Address) -> i128 {
         let pledges: Map<Address, i128> = env.storage().instance().get(&PLEDGES).unwrap();
         pledges.get(backer).unwrap_or(0)
@@ -141,4 +156,5 @@ impl PledgeRun {
 }
 
 #[cfg(test)]
-mod test;
+#[path = "test.rs"]
+mod tests;

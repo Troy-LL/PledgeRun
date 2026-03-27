@@ -11,7 +11,7 @@
 | Feature | MVP / roadmap |
 |--------|----------------|
 | Soroban smart contract | Yes — escrow, goal/deadline, release/refund logic |
-| Web app | Yes — `frontend/index.html` + Freighter |
+| Web app | Yes — `web/` (Vite + React) + Freighter |
 | XLM / USDC transfer | Roadmap — MVP tracks pledge amounts on-chain; production would settle via Soroban token / host functionality |
 | Custom tokens | Optional later |
 | Built-in DEX | No |
