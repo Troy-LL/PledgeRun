@@ -6,7 +6,7 @@ import {
   xdr,
 } from "@stellar/stellar-sdk"
 import { rpc } from "@stellar/stellar-sdk"
-import { getPublicKey, isConnected, requestAccess, signTransaction } from "@stellar/freighter-api"
+import { requestAccess, signTransaction } from "@stellar/freighter-api"
 
 export const RPC_URL = "https://soroban-testnet.stellar.org"
 export const NETWORK_PASSPHRASE = "Test SDF Network ; September 2015"
@@ -69,8 +69,17 @@ export async function simulateRead(
 }
 
 export async function connectWallet(): Promise<string> {
-  if (!(await isConnected())) await requestAccess()
-  return getPublicKey()
+  // requestAccess() prompts if needed and returns the public key. Avoid isConnected()+getPublicKey():
+  // with the extension injected, isConnected() can resolve to a truthy non-boolean and skip the prompt,
+  // then getPublicKey() may return "" without throwing.
+  const pk = await requestAccess()
+  const trimmed = pk?.trim() ?? ""
+  if (!trimmed) {
+    throw new Error(
+      "No address from Freighter. Install the extension, unlock it, and approve this site (Testnet)."
+    )
+  }
+  return trimmed
 }
 
 export async function callContract(
