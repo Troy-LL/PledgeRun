@@ -41,8 +41,8 @@ stellar-achievement-registry/
 ### Prerequisites
 
 - [Rust](https://rustup.rs/)
-- WASM target: `rustup target add wasm32-unknown-unknown`
-- [Stellar CLI](https://developers.stellar.org/docs/tools/stellar-cli): `cargo install --locked stellar-cli --features opt`
+- WASM target (required by `stellar contract build`): `rustup target add wasm32v1-none`
+- [Stellar CLI](https://developers.stellar.org/docs/tools/stellar-cli): `cargo install --locked stellar-cli`
 
 ### Run Tests
 
@@ -67,7 +67,7 @@ stellar keys fund my-key --network testnet
 
 # Deploy
 stellar contract deploy \
-  --wasm target/wasm32-unknown-unknown/release/stellar_achievement_registry.wasm \
+  --wasm target/wasm32v1-none/release/stellar_achievement_registry.wasm \
   --source my-key \
   --network testnet
 ```
