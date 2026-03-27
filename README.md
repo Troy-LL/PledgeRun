@@ -1,6 +1,6 @@
 # PledgeRun
 
-Trustless crowdfunding on **Stellar** — escrow logic in a **Soroban** contract, optional **web UI** in `frontend/`.
+**Trustless crowdfunding on Stellar** — campaign rules and pledge balances enforced by a **Soroban** smart contract, with an optional **React** UI in `web/`.
 
 Submitted for the **Stellar Philippines UniTour — University of East Caloocan** bootcamp via [Rise In](https://www.risein.com/programs/stellar-philippines-unitour-university-of-east-caloocan).
 
@@ -8,53 +8,73 @@ Submitted for the **Stellar Philippines UniTour — University of East Caloocan*
 
 ---
 
-## Problem & solution
+## Problem and solution
 
-**Problem:** Centralized crowdfunding platforms charge high fees, can freeze funds, and rarely give strong guarantees when campaigns fail.
+**Problem:** College students and indie creators often lose money to crowdfunding platforms that charge high fees, can freeze funds, and offer weak guarantees when a campaign fails.
 
-**Solution:** **PledgeRun** uses a Soroban smart contract to enforce campaign rules on-chain: pledges accrue toward a goal and deadline; after the deadline, the contract supports **release** (goal met) or **refund** (goal not met) — no platform sitting in the middle.
+**Solution:** **PledgeRun** uses a Soroban contract to store campaign state on-chain: pledges accrue toward a goal and deadline; after the deadline, the contract supports **release** (goal met) or **refund** (goal not met) — no platform in the middle of the rules.
 
-Full one-pager: [PROJECT_BRIEF.md](./PROJECT_BRIEF.md).
-
----
-
-## Repo layout
-
-```
-├── contract/
-│   ├── src/lib.rs      ← PledgeRun Soroban contract
-│   ├── src/test.rs     ← 3 unit tests
-│   └── Cargo.toml
-├── web/                ← React + Vite + Tailwind + shadcn/ui (main UI)
-├── frontend/           ← legacy single-file HTML (see legacy-index.html)
-└── PROJECT_BRIEF.md
-```
+More detail: [PROJECT_BRIEF.md](./PROJECT_BRIEF.md).
 
 ---
 
-## Contract API (MVP)
+## Timeline
 
-| Function | Role |
-|----------|------|
-| `init` | One-time campaign: creator, goal (stroops), deadline (unix time) |
-| `pledge` | Backer pledges an amount (tracked on-chain) |
-| `release` | After deadline if goal met — finalize |
-| `refund` | After deadline if goal not met — finalize |
-| `get_campaign` | Read campaign state |
-| `get_pledge` | Read a backer’s pledged amount |
+| Phase | Focus |
+|--------|--------|
+| **Design** | Problem/solution, contract storage & auth model |
+| **Contract** | `init` / `pledge` / `release` / `refund` + unit tests |
+| **Frontend** | Vite + React + Freighter (`web/`), testnet RPC |
+| **Deploy** | WASM build, testnet deploy, `VITE_CONTRACT_ID` for the UI |
+
+---
+
+## Stellar features used
+
+| Feature | Use in PledgeRun |
+|--------|-------------------|
+| **Soroban smart contract** | Escrow-style campaign state, `Address` auth, instance storage (`Campaign`, pledge `Map`) |
+| **Stellar testnet** | Deploy + invoke via Stellar CLI; web uses Soroban RPC (`soroban-testnet.stellar.org`) |
+| **Freighter** | Wallet connect + sign transactions from the browser |
+| **Native XLM settlement** | Roadmap — MVP records pledge **amounts** on-chain; wiring token transfers is a follow-on |
 
 ---
 
 ## Prerequisites
 
-- Rust ([rustup](https://rustup.rs/))
-- `rustup target add wasm32v1-none`
-- [Stellar CLI](https://developers.stellar.org/docs/tools/stellar-cli): `cargo install --locked stellar-cli`
-- [Freighter](https://www.freighter.app/) (for the frontend, testnet)
+| Tool | Notes |
+|------|--------|
+| **Rust** | Stable toolchain via [rustup](https://rustup.rs/) (e.g. **1.75+** recommended) |
+| **WASM target** | `rustup target add wasm32v1-none` |
+| **Stellar CLI** (includes Soroban workflows) | **≥ 20.x** — check with `stellar --version` (e.g. **25.x**). Install: [Stellar CLI](https://developers.stellar.org/docs/tools/stellar-cli) — `cargo install --locked stellar-cli` |
+| **Node.js** | **18+** for `web/` (optional) |
+
+Older tutorials may refer to a standalone **`soroban`** binary; current releases expose the same flows as **`stellar contract …`**.
 
 ---
 
-## Test
+## How to build
+
+From the repository root:
+
+```bash
+cd contract
+stellar contract build
+```
+
+Output (default): `contract/target/wasm32v1-none/release/pledge_run.wasm`.
+
+If your environment still has the legacy Soroban CLI name:
+
+```bash
+soroban contract build
+```
+
+(equivalent intent; prefer **`stellar contract build`** with the unified CLI.)
+
+---
+
+## How to test
 
 ```bash
 cd contract
@@ -65,55 +85,106 @@ Expect **3** tests passing.
 
 ---
 
-## Build (WASM)
+## How to deploy to testnet
+
+Fund a testnet identity (once), build WASM, then deploy:
 
 ```bash
-cd contract
-stellar contract build
-```
-
-Output: `contract/target/wasm32v1-none/release/pledge_run.wasm`
-
----
-
-## Deploy (testnet)
-
-```bash
-stellar keys generate student --network testnet
+stellar keys generate student --network testnet   # skip if you already have a key
 stellar keys fund student --network testnet
 
 cd contract
+stellar contract build
 stellar contract deploy \
   --wasm target/wasm32v1-none/release/pledge_run.wasm \
   --source-account student \
   --network testnet
 ```
 
-Copy the **Contract ID** (`C…`), then set `CONTRACT_ID` in `frontend/index.html` (replace `YOUR_CONTRACT_ID_HERE`).
+Copy the printed **Contract ID** (`C…`). For the web app, set `VITE_CONTRACT_ID` in `web/.env` (see `web/.env.example`).
+
+Legacy alias:
+
+```bash
+soroban contract deploy --wasm ... --source-account student --network testnet
+```
 
 ---
 
-## Frontend (React + shadcn/ui)
+## Sample CLI invocation (MVP)
 
-From the **repo root**:
+`init` must be signed by the **creator**; `creator` must match `--source-account`. Example using the same testnet identity for both:
 
 ```bash
-cd web && npm install
-npm run dev
+export CONTRACT_ID="C_REPLACE_WITH_YOUR_DEPLOYED_CONTRACT_ID"
+export CREATOR="$(stellar keys address student)"
+
+stellar contract invoke \
+  --id "$CONTRACT_ID" \
+  --network testnet \
+  --source-account student \
+  -- \
+  init \
+  --creator "$CREATOR" \
+  --goal 1000000000 \
+  --deadline 2000000000
 ```
 
-Or from root (after `cd web && npm install` once): `npm run dev` — Vite serves at **http://127.0.0.1:5173** with HMR.
+- **`goal`** is in **stroops** (1 XLM = 10_000_000 stroops); `1000000000` ≈ **100 XLM**.
+- **`deadline`** is a **Unix timestamp** (seconds); must be in the future at invocation time (use a real future time).
 
-1. Copy `web/.env.example` to `web/.env` and set `VITE_CONTRACT_ID` to your deployed contract.
-2. Use **Freighter** on **Testnet**.
+Example **`pledge`** (backer must sign; here the backer is the same account):
 
-**Production build:** `npm run build:web` → static files in `web/dist/`.
+```bash
+stellar contract invoke \
+  --id "$CONTRACT_ID" \
+  --network testnet \
+  --source-account student \
+  -- \
+  pledge \
+  --backer "$CREATOR" \
+  --amount 50000000
+```
 
-**Legacy:** `frontend/legacy-index.html` (plain HTML + ESM) — run `npm run dev:legacy` from root if needed.
+`50000000` stroops = **5 XLM** (dummy-sized pledge).
 
-**Design tooling:** For systematic UI/UX guidance you can use [UI UX Pro Max](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill) (`uipro init --ai cursor` installs skills for Cursor).
+Simulate without submitting: add **`--send no`** to `stellar contract invoke` (returns simulation result only).
 
-**CSP / embedded browser:** Fonts are bundled via `@fontsource` (no Google Fonts CDN). If you still see `Content-Security-Policy: default-src 'none'` errors, the **Cursor Simple Browser** (or similar) is blocking network requests — open **http://127.0.0.1:5173** in Chrome or Edge instead. The DevTools `.well-known/...` message is harmless.
+---
+
+## Repo layout
+
+```
+├── contract/          Soroban contract (Rust)
+├── web/               React + Vite + Tailwind + shadcn/ui (main UI)
+├── frontend/          legacy single-file HTML (`legacy-index.html`)
+└── PROJECT_BRIEF.md
+```
+
+### Web UI (optional)
+
+```bash
+cd web && npm install && npm run dev
+```
+
+Or from repo root (after `web` deps installed): `npm run dev` → **http://127.0.0.1:5173**
+
+Set **`VITE_CONTRACT_ID`** in `web/.env`. Use **Freighter** on **testnet**.
+
+**Production build:** `npm run build:web` → `web/dist/`.
+
+---
+
+## Contract API (MVP)
+
+| Function | Role |
+|----------|------|
+| `init` | One-time campaign: creator, goal (stroops), deadline (unix) |
+| `pledge` | Backer pledge amount (tracked on-chain) |
+| `release` | After deadline if goal met — finalize |
+| `refund` | After deadline if goal not met — finalize |
+| `get_campaign` | Read campaign state |
+| `get_pledge` | Read a backer’s pledged amount |
 
 ---
 
@@ -127,4 +198,4 @@ Or from root (after `cd web && npm install` once): `npm run dev` — Vite serves
 
 ## License
 
-MIT
+This project is licensed under the **MIT License** — see [LICENSE](./LICENSE).
