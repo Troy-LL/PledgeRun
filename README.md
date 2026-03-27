@@ -4,6 +4,8 @@ A **Soroban** smart contract built on the **Stellar** blockchain that stores and
 
 Submitted for the **Stellar Philippines UniTour — University of East Caloocan** bootcamp via [Rise In](https://www.risein.com/programs/stellar-philippines-unitour-university-of-east-caloocan).
 
+**Student:** Troy Lauren T. Lazaro · BSIT 2nd Year (BSIT2-1N) · Telegram: [@Itsniched](https://t.me/Itsniched)
+
 ---
 
 ## 📋 What It Does
