@@ -1,6 +1,10 @@
 {
   "name": "pledgerun",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Troy-LL/PledgeRun.git"
+  },
   "scripts": {
     "dev": "npm run dev --prefix web",
     "dev:legacy": "live-server frontend --port=5173 --open=/legacy-index.html --cors",
