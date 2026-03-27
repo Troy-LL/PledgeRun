@@ -1,0 +1,13 @@
+{
+  "name": "pledgerun",
+  "private": true,
+  "scripts": {
+    "dev": "npm run dev --prefix web",
+    "dev:legacy": "live-server frontend --port=5173 --open=/legacy-index.html --cors",
+    "build:web": "npm run build --prefix web",
+    "preview:web": "npm run preview --prefix web"
+  },
+  "devDependencies": {
+    "live-server": "^1.2.2"
+  }
+}
